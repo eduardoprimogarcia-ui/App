@@ -205,8 +205,48 @@ elif choice == "📄 PDF Semanal":
 # --- ELIMINAR DATOS ---
 elif choice == "🗑️ Eliminar Datos":
     st.header("🗑️ Borrado de Datos")
-    conf = st.checkbox("Confirmo borrado permanente")
-    if st.button("Limpiar toda la asistencia") and conf:
+
+    st.subheader("Limpiar toda la asistencia")
+    conf_asist = st.checkbox("Confirmo borrado permanente de asistencia")
+    if st.button("Limpiar toda la asistencia") and conf_asist:
         st.session_state.df_asistencia = pd.DataFrame(columns=["Fecha", "Curso", "DNI", "Estado"])
         guardar_datos(st.session_state.df_asistencia, "asistencia")
+        st.success("Asistencia borrada")
         st.rerun()
+
+    st.divider()
+
+    st.subheader("Eliminar un alumno")
+    if not df_alumnos.empty:
+        alu_sel = st.selectbox("Selecciona alumno a eliminar", df_alumnos["Nombre"] + " (" + df_alumnos["DNI"] + ")", key="del_alu")
+        dni_del = alu_sel.split("(")[1].replace(")", "")
+        conf_alu = st.checkbox("Confirmo eliminar este alumno y todos sus datos", key="conf_alu")
+        if st.button("Eliminar alumno") and conf_alu:
+            st.session_state.df_alumnos = df_alumnos[df_alumnos["DNI"] != dni_del].reset_index(drop=True)
+            st.session_state.df_matriculas = df_matriculas[df_matriculas["DNI"] != dni_del].reset_index(drop=True)
+            st.session_state.df_asistencia = df_asistencia[df_asistencia["DNI"] != dni_del].reset_index(drop=True)
+            guardar_datos(st.session_state.df_alumnos, "alumnos")
+            guardar_datos(st.session_state.df_matriculas, "matriculas")
+            guardar_datos(st.session_state.df_asistencia, "asistencia")
+            st.success(f"Alumno {alu_sel} eliminado")
+            st.rerun()
+    else:
+        st.info("No hay alumnos registrados")
+
+    st.divider()
+
+    st.subheader("Eliminar un curso")
+    if not df_cursos.empty:
+        curso_del = st.selectbox("Selecciona curso a eliminar", df_cursos["Nombre"], key="del_cur")
+        conf_cur = st.checkbox("Confirmo eliminar este curso y todos sus datos", key="conf_cur")
+        if st.button("Eliminar curso") and conf_cur:
+            st.session_state.df_cursos = df_cursos[df_cursos["Nombre"] != curso_del].reset_index(drop=True)
+            st.session_state.df_matriculas = df_matriculas[df_matriculas["Curso"] != curso_del].reset_index(drop=True)
+            st.session_state.df_asistencia = df_asistencia[df_asistencia["Curso"] != curso_del].reset_index(drop=True)
+            guardar_datos(st.session_state.df_cursos, "cursos")
+            guardar_datos(st.session_state.df_matriculas, "matriculas")
+            guardar_datos(st.session_state.df_asistencia, "asistencia")
+            st.success(f"Curso '{curso_del}' eliminado")
+            st.rerun()
+    else:
+        st.info("No hay cursos registrados")
