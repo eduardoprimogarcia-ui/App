@@ -2,36 +2,49 @@ import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
 import holidays
-import os
 from fpdf import FPDF
+from streamlit_gsheets import GSheetsConnection  # <-- NUEVA LIBRERÍA
 
 # =========================================================
-# 1. CONFIGURACIÓN Y PERSISTENCIA DE DATOS
+# 1. CONFIGURACIÓN Y CONEXIÓN A GOOGLE SHEETS
 # =========================================================
 st.set_page_config(page_title="ERP Formación 2026", layout="wide", page_icon="🎓")
 
-def cargar_datos(archivo, columnas):
-    if os.path.exists(archivo):
-        try:
-            return pd.read_csv(archivo)
-        except:
+def cargar_datos(hoja, columnas):
+    try:
+        # Conecta con Google Sheets y lee los datos sin usar caché (ttl=0)
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df = conn.read(worksheet=hoja, ttl=0)
+        
+        # Google Sheets a veces devuelve filas/columnas vacías, las limpiamos
+        df = df.dropna(how="all")
+        if df.empty or len(df.columns) == 0:
             return pd.DataFrame(columns=columnas)
-    return pd.DataFrame(columns=columnas)
+        return df
+    except Exception as e:
+        # Si la hoja no existe o hay error, devuelve un DataFrame vacío
+        return pd.DataFrame(columns=columnas)
 
-def guardar_datos(df, archivo):
-    df.to_csv(archivo, index=False)
+def guardar_datos(df, hoja):
+    # Sobrescribe la hoja específica con el DataFrame actualizado
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    conn.update(worksheet=hoja, data=df)
 
 def inicializar_estado():
     if 'df_alumnos' not in st.session_state:
-        st.session_state.df_alumnos = cargar_datos("alumnos.csv", ["DNI", "Nombre"])
+        st.session_state.df_alumnos = cargar_datos("alumnos", ["DNI", "Nombre"])
     if 'df_cursos' not in st.session_state:
-        st.session_state.df_cursos = cargar_datos("cursos.csv", ["Nombre", "Inicio", "Fin", "Región"])
+        st.session_state.df_cursos = cargar_datos("cursos", ["Nombre", "Inicio", "Fin", "Región"])
     if 'df_matriculas' not in st.session_state:
-        st.session_state.df_matriculas = cargar_datos("matriculas.csv", ["Curso", "DNI"])
+        st.session_state.df_matriculas = cargar_datos("matriculas", ["Curso", "DNI"])
     if 'df_asistencia' not in st.session_state:
-        st.session_state.df_asistencia = cargar_datos("asistencia.csv", ["Fecha", "Curso", "DNI", "Estado"])
+        st.session_state.df_asistencia = cargar_datos("asistencia", ["Fecha", "Curso", "DNI", "Estado"])
 
 inicializar_estado()
+
+# =========================================================
+# (El resto de tu código a partir de aquí se queda EXACTAMENTE igual)
+# =========================================================
 
 # =========================================================
 # 2. LÓGICA DE CALENDARIO Y PDF
