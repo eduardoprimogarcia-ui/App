@@ -142,17 +142,18 @@ elif choice == "🖊️ Pasar Lista":
         row = df_cursos[df_cursos["Nombre"] == c_l].iloc[0]
         dias = obtener_calendario_curso(pd.to_datetime(row["Inicio"]).date(), pd.to_datetime(row["Fin"]).date(), row["Región"])
         f_l = st.selectbox("Fecha", dias)
-        
+
         dnis = df_matriculas[df_matriculas["Curso"] == c_l]["DNI"]
         alus = df_alumnos[df_alumnos["DNI"].isin(dnis)]
-        
+
         with st.form("f_lista"):
             res = {}
             for _, r in alus.iterrows():
                 res[r["DNI"]] = st.radio(f"{r['Nombre']}", ["Presente", "Ausente"], horizontal=True)
             if st.form_submit_button("Guardar"):
-                # Limpiar registros previos de ese día/curso
-                st.session_state.df_asistencia = df_asistencia[~((df_asistencia["Fecha"] == str(f_l)) & (df_asistencia["Curso"] == c_l))]
+                st.session_state.df_asistencia = df_asistencia[
+                    ~((df_asistencia["Fecha"] == str(f_l)) & (df_asistencia["Curso"] == c_l))
+                ]
                 for d, e in res.items():
                     nueva_fila = pd.DataFrame([[str(f_l), c_l, d, e]], columns=["Fecha", "Curso", "DNI", "Estado"])
                     st.session_state.df_asistencia = pd.concat([st.session_state.df_asistencia, nueva_fila])
@@ -166,7 +167,7 @@ elif choice == "📊 Reporte":
         c_r = st.selectbox("Curso", df_cursos["Nombre"])
         row = df_cursos[df_cursos["Nombre"] == c_r].iloc[0]
         total_d = len(obtener_calendario_curso(pd.to_datetime(row["Inicio"]).date(), pd.to_datetime(row["Fin"]).date(), row["Región"]))
-        
+
         dnis_r = df_matriculas[df_matriculas["Curso"] == c_r]["DNI"]
         data = []
         for d in dnis_r:
@@ -176,7 +177,7 @@ elif choice == "📊 Reporte":
             pct = (f/total_d*100) if total_d > 0 else 0
             est = "❌ BAJA" if pct >= 80 else "⚠️ VARIABLE" if pct >= 25 else "✅ ACTIVO"
             data.append([nom, d, p, f, f"{pct:.1f}%", est])
-        
+
         st.dataframe(pd.DataFrame(data, columns=["Alumno", "DNI", "Pres.", "Faltas", "%", "Estado"]))
 
 # --- PDF ---
@@ -187,18 +188,20 @@ elif choice == "📄 PDF Semanal":
         f_ref = st.date_input("Día de la semana")
         lun = f_ref - timedelta(days=f_ref.weekday())
         dom = lun + timedelta(days=6)
-        
-        as_sem = df_asistencia[(df_asistencia["Curso"] == c_pdf) & 
-                               (pd.to_datetime(df_asistencia["Fecha"]).dt.date >= lun) & 
-                               (pd.to_datetime(df_asistencia["Fecha"]).dt.date <= dom)]
-        
+
+        as_sem = df_asistencia[
+            (df_asistencia["Curso"] == c_pdf) &
+            (pd.to_datetime(df_asistencia["Fecha"]).dt.date >= lun) &
+            (pd.to_datetime(df_asistencia["Fecha"]).dt.date <= dom)
+        ]
+
         if not as_sem.empty:
             resumen = []
             for d in df_matriculas[df_matriculas["Curso"] == c_pdf]["DNI"]:
                 n = df_alumnos[df_alumnos["DNI"] == d]["Nombre"].iloc[0]
                 dat = as_sem[as_sem["DNI"] == d]
                 resumen.append({"Alumno": n, "DNI": d, "Pres.": len(dat[dat["Estado"]=="Presente"]), "Faltas": len(dat[dat["Estado"]=="Ausente"])})
-            
+
             pdf_b = generar_pdf_semanal(pd.DataFrame(resumen), c_pdf, f"{lun} a {dom}")
             st.download_button("Descargar PDF", pdf_b, "reporte.pdf", "application/pdf")
 
@@ -206,8 +209,9 @@ elif choice == "📄 PDF Semanal":
 elif choice == "🗑️ Eliminar Datos":
     st.header("🗑️ Borrado de Datos")
 
+    # -- Limpiar toda la asistencia --
     st.subheader("Limpiar toda la asistencia")
-    conf_asist = st.checkbox("Confirmo borrado permanente de asistencia")
+    conf_asist = st.checkbox("Confirmo borrado permanente de toda la asistencia")
     if st.button("Limpiar toda la asistencia") and conf_asist:
         st.session_state.df_asistencia = pd.DataFrame(columns=["Fecha", "Curso", "DNI", "Estado"])
         guardar_datos(st.session_state.df_asistencia, "asistencia")
@@ -216,6 +220,43 @@ elif choice == "🗑️ Eliminar Datos":
 
     st.divider()
 
+    # -- Eliminar asistencia de un alumno --
+    st.subheader("Eliminar asistencia de un alumno")
+    if not df_alumnos.empty and not df_asistencia.empty:
+        alu_asist = st.selectbox("Selecciona alumno", df_alumnos["Nombre"] + " (" + df_alumnos["DNI"] + ")", key="del_asist_alu")
+        dni_asist = alu_asist.split("(")[1].replace(")", "")
+
+        cursos_con_asist = df_asistencia[df_asistencia["DNI"] == dni_asist]["Curso"].unique()
+        if len(cursos_con_asist) > 0:
+            st.caption(f"Tiene registros en: {', '.join(cursos_con_asist)}")
+
+        opcion = st.radio("¿Qué asistencia borrar?", ["Solo de un curso", "Toda su asistencia"], key="radio_asist")
+
+        if opcion == "Solo de un curso" and not df_cursos.empty:
+            curso_asist = st.selectbox("Curso", df_cursos["Nombre"], key="curso_asist_del")
+            conf_asist_alu = st.checkbox("Confirmo borrado", key="conf_asist_alu_cur")
+            if st.button("Eliminar asistencia de ese curso") and conf_asist_alu:
+                st.session_state.df_asistencia = df_asistencia[
+                    ~((df_asistencia["DNI"] == dni_asist) & (df_asistencia["Curso"] == curso_asist))
+                ].reset_index(drop=True)
+                guardar_datos(st.session_state.df_asistencia, "asistencia")
+                st.success(f"Asistencia de {alu_asist} en '{curso_asist}' eliminada")
+                st.rerun()
+        else:
+            conf_asist_alu2 = st.checkbox("Confirmo borrado de toda su asistencia", key="conf_asist_alu_todo")
+            if st.button("Eliminar toda su asistencia") and conf_asist_alu2:
+                st.session_state.df_asistencia = df_asistencia[
+                    df_asistencia["DNI"] != dni_asist
+                ].reset_index(drop=True)
+                guardar_datos(st.session_state.df_asistencia, "asistencia")
+                st.success(f"Toda la asistencia de {alu_asist} eliminada")
+                st.rerun()
+    else:
+        st.info("No hay datos de asistencia registrados")
+
+    st.divider()
+
+    # -- Eliminar un alumno --
     st.subheader("Eliminar un alumno")
     if not df_alumnos.empty:
         alu_sel = st.selectbox("Selecciona alumno a eliminar", df_alumnos["Nombre"] + " (" + df_alumnos["DNI"] + ")", key="del_alu")
@@ -235,6 +276,7 @@ elif choice == "🗑️ Eliminar Datos":
 
     st.divider()
 
+    # -- Eliminar un curso --
     st.subheader("Eliminar un curso")
     if not df_cursos.empty:
         curso_del = st.selectbox("Selecciona curso a eliminar", df_cursos["Nombre"], key="del_cur")
