@@ -2,3 +2,4 @@ streamlit
 pandas
 holidays
 fpdf
+st-gsheets-connection
