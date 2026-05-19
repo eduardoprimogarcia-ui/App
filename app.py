@@ -97,8 +97,8 @@ menu = [
 ]
 choice = st.sidebar.radio("Menú", menu)
 
-df_alumnos   = st.session_state.df_alumnos
-df_cursos    = st.session_state.df_cursos
+df_alumnos    = st.session_state.df_alumnos
+df_cursos     = st.session_state.df_cursos
 df_matriculas = st.session_state.df_matriculas
 df_asistencia = st.session_state.df_asistencia
 
@@ -107,15 +107,15 @@ if choice == "👥 Alumnos":
     st.header("👥 Gestión de Alumnos")
     with st.form("f_alu", clear_on_submit=True):
         c1, c2 = st.columns(2)
-        dni  = c1.text_input("DNI")
-        nom  = c2.text_input("Nombre y Apellidos")
-        dir_ = st.text_input("Dirección")
+        dni   = c1.text_input("DNI")
+        nom   = c2.text_input("Nombre y Apellidos")
+        dir_  = st.text_input("Dirección")
         c3, c4, c5 = st.columns(3)
-        cp   = c3.text_input("CP")
-        pob  = c4.text_input("Población")
-        prov = c5.text_input("Provincia")
+        cp    = c3.text_input("CP")
+        pob   = c4.text_input("Población")
+        prov  = c5.text_input("Provincia")
         c6, c7 = st.columns(2)
-        tel  = c6.text_input("Teléfono")
+        tel   = c6.text_input("Teléfono")
         email = c7.text_input("Email")
         if st.form_submit_button("Añadir alumno"):
             nuevo = pd.DataFrame([[dni, nom, dir_, cp, pob, prov, tel, email]],
@@ -131,11 +131,11 @@ elif choice == "📚 Cursos":
     st.header("📚 Gestión de Cursos")
     with st.form("f_cur"):
         c1, c2 = st.columns(2)
-        plan  = c1.text_input("Plan Formativo")
+        plan   = c1.text_input("Plan Formativo")
         codigo = c2.text_input("Código Acción Formativa")
         nombre = st.text_input("Nombre del Curso")
         c3, c4 = st.columns(2)
-        horas  = c3.number_input("Horas totales", min_value=1, value=40)
+        horas   = c3.number_input("Horas totales", min_value=1, value=40)
         horario = c4.text_input("Horario (ej: 09:00-14:00)")
         c5, c6 = st.columns(2)
         ini = c5.date_input("Fecha Inicio")
@@ -151,7 +151,6 @@ elif choice == "📚 Cursos":
             st.rerun()
     if not df_cursos.empty:
         st.dataframe(df_cursos, use_container_width=True)
-        # Mostrar límites de horas por curso
         st.subheader("Límites de horas por curso")
         for _, row in df_cursos.iterrows():
             try:
@@ -170,7 +169,6 @@ elif choice == "📝 Matriculación":
             a_sel = st.selectbox("Alumno", df_alumnos["Nombre"] + " (" + df_alumnos["DNI"] + ")")
             dni_m = a_sel.split("(")[1].replace(")", "")
             if st.form_submit_button("Matricular"):
-                # Evitar duplicados
                 ya = df_matriculas[(df_matriculas["Curso"] == c_sel) & (df_matriculas["DNI"] == dni_m)]
                 if not ya.empty:
                     st.warning("Este alumno ya está matriculado en ese curso")
@@ -297,26 +295,28 @@ elif choice == "🔍 Búsqueda":
         busq = st.text_input("Nombre, DNI o email del alumno")
         if busq:
             mask = (
-                df_alumnos["Nombre"].str.contains(busq, case=False, na=False) |
-                df_alumnos["DNI"].str.contains(busq, case=False, na=False) |
-                df_alumnos["Email"].str.contains(busq, case=False, na=False)
+                df_alumnos["Nombre"].astype(str).str.contains(busq, case=False, na=False) |
+                df_alumnos["DNI"].astype(str).str.contains(busq, case=False, na=False) |
+                df_alumnos["Email"].astype(str).str.contains(busq, case=False, na=False)
             )
             resultados = df_alumnos[mask]
             if not resultados.empty:
                 for _, alu in resultados.iterrows():
                     with st.expander(f"👤 {alu['Nombre']} — {alu['DNI']}"):
                         c1, c2 = st.columns(2)
-                        c1.write(f"**Dirección:** {alu.get('Dirección','')}")
-                        c1.write(f"**CP:** {alu.get('CP','')} — **Población:** {alu.get('Población','')}")
-                        c1.write(f"**Provincia:** {alu.get('Provincia','')}")
-                        c2.write(f"**Teléfono:** {alu.get('Teléfono','')}")
-                        c2.write(f"**Email:** {alu.get('Email','')}")
-                        # Cursos matriculados
+                        c1.write(f"**Dirección:** {alu.get('Dirección', '')}")
+                        c1.write(f"**CP:** {alu.get('CP', '')} — **Población:** {alu.get('Población', '')}")
+                        c1.write(f"**Provincia:** {alu.get('Provincia', '')}")
+                        c2.write(f"**Teléfono:** {alu.get('Teléfono', '')}")
+                        c2.write(f"**Email:** {alu.get('Email', '')}")
                         cursos_alu = df_matriculas[df_matriculas["DNI"] == alu["DNI"]]["Curso"].tolist()
                         if cursos_alu:
                             st.write("**Cursos matriculados:**")
                             for c in cursos_alu:
-                                asist = df_asistencia[(df_asistencia["DNI"] == alu["DNI"]) & (df_asistencia["Curso"] == c)]
+                                asist = df_asistencia[
+                                    (df_asistencia["DNI"] == alu["DNI"]) &
+                                    (df_asistencia["Curso"] == c)
+                                ]
                                 p = len(asist[asist["Estado"] == "Presente"])
                                 f = len(asist[asist["Estado"] == "Ausente"])
                                 st.caption(f"• {c} → Presencias: {p} | Faltas: {f}")
@@ -329,18 +329,18 @@ elif choice == "🔍 Búsqueda":
         busq = st.text_input("Nombre o código del curso")
         if busq:
             mask = (
-                df_cursos["Nombre"].str.contains(busq, case=False, na=False) |
-                df_cursos["Código"].str.contains(busq, case=False, na=False) |
-                df_cursos["Plan Formativo"].str.contains(busq, case=False, na=False)
+                df_cursos["Nombre"].astype(str).str.contains(busq, case=False, na=False) |
+                df_cursos["Código"].astype(str).str.contains(busq, case=False, na=False) |
+                df_cursos["Plan Formativo"].astype(str).str.contains(busq, case=False, na=False)
             )
             resultados = df_cursos[mask]
             if not resultados.empty:
                 for _, cur in resultados.iterrows():
-                    with st.expander(f"📚 {cur['Nombre']} — {cur.get('Código','')}"):
+                    with st.expander(f"📚 {cur['Nombre']} — {cur.get('Código', '')}"):
                         c1, c2 = st.columns(2)
-                        c1.write(f"**Plan Formativo:** {cur.get('Plan Formativo','')}")
-                        c1.write(f"**Inicio:** {cur.get('Inicio','')} | **Fin:** {cur.get('Fin','')}")
-                        c1.write(f"**Horario:** {cur.get('Horario','')}")
+                        c1.write(f"**Plan Formativo:** {cur.get('Plan Formativo', '')}")
+                        c1.write(f"**Inicio:** {cur.get('Inicio', '')} | **Fin:** {cur.get('Fin', '')}")
+                        c1.write(f"**Horario:** {cur.get('Horario', '')}")
                         try:
                             h = float(cur["Horas"])
                             h25, h75 = calcular_horas_limite(h)
@@ -349,14 +349,16 @@ elif choice == "🔍 Búsqueda":
                             c2.write(f"**Límite faltas 75%:** {h75}h")
                         except:
                             pass
-                        # Alumnos matriculados
                         dnis_cur = df_matriculas[df_matriculas["Curso"] == cur["Nombre"]]["DNI"].tolist()
                         if dnis_cur:
                             st.write(f"**Alumnos matriculados ({len(dnis_cur)}):**")
                             for d in dnis_cur:
                                 fila = df_alumnos[df_alumnos["DNI"] == d]
                                 nombre_alu = fila["Nombre"].iloc[0] if not fila.empty else d
-                                asist = df_asistencia[(df_asistencia["DNI"] == d) & (df_asistencia["Curso"] == cur["Nombre"])]
+                                asist = df_asistencia[
+                                    (df_asistencia["DNI"] == d) &
+                                    (df_asistencia["Curso"] == cur["Nombre"])
+                                ]
                                 p = len(asist[asist["Estado"] == "Presente"])
                                 f = len(asist[asist["Estado"] == "Ausente"])
                                 st.caption(f"• {nombre_alu} ({d}) → Presencias: {p} | Faltas: {f}")
@@ -381,7 +383,9 @@ elif choice == "🗑️ Eliminar Datos":
 
     st.subheader("Eliminar asistencia de un alumno")
     if not df_alumnos.empty and not df_asistencia.empty:
-        alu_asist = st.selectbox("Selecciona alumno", df_alumnos["Nombre"] + " (" + df_alumnos["DNI"] + ")", key="del_asist_alu")
+        alu_asist = st.selectbox("Selecciona alumno",
+                                 df_alumnos["Nombre"] + " (" + df_alumnos["DNI"] + ")",
+                                 key="del_asist_alu")
         dni_asist = alu_asist.split("(")[1].replace(")", "")
 
         cursos_con_asist = df_asistencia[df_asistencia["DNI"] == dni_asist]["Curso"].unique()
@@ -398,7 +402,7 @@ elif choice == "🗑️ Eliminar Datos":
                     ~((df_asistencia["DNI"] == dni_asist) & (df_asistencia["Curso"] == curso_asist))
                 ].reset_index(drop=True)
                 guardar_datos(st.session_state.df_asistencia, "asistencia")
-                st.success(f"Asistencia eliminada")
+                st.success("Asistencia eliminada")
                 st.rerun()
         else:
             conf_asist_alu2 = st.checkbox("Confirmo borrado de toda su asistencia", key="conf_asist_alu_todo")
@@ -407,7 +411,7 @@ elif choice == "🗑️ Eliminar Datos":
                     df_asistencia["DNI"] != dni_asist
                 ].reset_index(drop=True)
                 guardar_datos(st.session_state.df_asistencia, "asistencia")
-                st.success(f"Toda la asistencia eliminada")
+                st.success("Toda la asistencia eliminada")
                 st.rerun()
     else:
         st.info("No hay datos de asistencia registrados")
@@ -417,7 +421,8 @@ elif choice == "🗑️ Eliminar Datos":
     st.subheader("Eliminar un alumno")
     if not df_alumnos.empty:
         alu_sel = st.selectbox("Selecciona alumno a eliminar",
-                               df_alumnos["Nombre"] + " (" + df_alumnos["DNI"] + ")", key="del_alu")
+                               df_alumnos["Nombre"] + " (" + df_alumnos["DNI"] + ")",
+                               key="del_alu")
         dni_del = alu_sel.split("(")[1].replace(")", "")
         conf_alu = st.checkbox("Confirmo eliminar este alumno y todos sus datos", key="conf_alu")
         if st.button("Eliminar alumno") and conf_alu:
@@ -427,7 +432,7 @@ elif choice == "🗑️ Eliminar Datos":
             guardar_datos(st.session_state.df_alumnos, "alumnos")
             guardar_datos(st.session_state.df_matriculas, "matriculas")
             guardar_datos(st.session_state.df_asistencia, "asistencia")
-            st.success(f"Alumno eliminado")
+            st.success("Alumno eliminado")
             st.rerun()
     else:
         st.info("No hay alumnos registrados")
@@ -445,7 +450,7 @@ elif choice == "🗑️ Eliminar Datos":
             guardar_datos(st.session_state.df_cursos, "cursos")
             guardar_datos(st.session_state.df_matriculas, "matriculas")
             guardar_datos(st.session_state.df_asistencia, "asistencia")
-            st.success(f"Curso eliminado")
+            st.success("Curso eliminado")
             st.rerun()
     else:
         st.info("No hay cursos registrados")
