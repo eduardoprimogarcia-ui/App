@@ -4,6 +4,7 @@ from datetime import date, timedelta
 import holidays
 from fpdf import FPDF
 from streamlit_gsheets import GSheetsConnection
+import calendar
 
 # =========================================================
 # 1. CONFIGURACIÓN Y CONEXIÓN A GOOGLE SHEETS
@@ -60,6 +61,85 @@ def calcular_horas_limite(horas_totales):
     h75 = round(horas_totales * 0.75, 1)
     return h25, h75
 
+def render_calendario(inicio, fin, region):
+    years = list(set([inicio.year, fin.year]))
+    festivos = holidays.CountryHoliday('ES', subdiv=region, years=years)
+    hoy = date.today()
+
+    # Iterar mes a mes
+    curr_month = inicio.replace(day=1)
+    fin_month  = fin.replace(day=1)
+
+    while curr_month <= fin_month:
+        year  = curr_month.year
+        month = curr_month.month
+        nombre_mes = curr_month.strftime("%B %Y").capitalize()
+        st.markdown(f"**{nombre_mes}**")
+
+        # Cabecera días de la semana
+        cols = st.columns(7)
+        for i, dia in enumerate(["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]):
+            cols[i].markdown(f"<center><small><b>{dia}</b></small></center>", unsafe_allow_html=True)
+
+        # Calcular primer día del mes y días totales
+        primer_dia = curr_month.weekday()  # 0=lunes
+        dias_mes   = calendar.monthrange(year, month)[1]
+
+        # Construir semanas
+        dia_num = 1
+        slot    = 0
+        while dia_num <= dias_mes:
+            cols = st.columns(7)
+            for col_i in range(7):
+                if slot < primer_dia and dia_num == 1:
+                    cols[col_i].write("")
+                    slot += 1
+                    continue
+                if dia_num > dias_mes:
+                    cols[col_i].write("")
+                    continue
+
+                d = date(year, month, dia_num)
+
+                if d.weekday() >= 5:
+                    # Fin de semana
+                    cols[col_i].markdown(
+                        f"<center><small style='color:gray'>{dia_num}</small></center>",
+                        unsafe_allow_html=True
+                    )
+                elif d in festivos:
+                    # Festivo
+                    nombre_festivo = festivos[d]
+                    cols[col_i].markdown(
+                        f"<center><span title='{nombre_festivo}' style='background:#ffcccc;border-radius:4px;padding:1px 4px;font-size:12px'>🔴 {dia_num}</span></center>",
+                        unsafe_allow_html=True
+                    )
+                elif d < inicio or d > fin:
+                    # Fuera del rango del curso
+                    cols[col_i].markdown(
+                        f"<center><small style='color:#ccc'>{dia_num}</small></center>",
+                        unsafe_allow_html=True
+                    )
+                else:
+                    # Día lectivo
+                    estilo = "background:#c8e6c9;border-radius:4px;padding:1px 4px;font-size:12px"
+                    if d == hoy:
+                        estilo = "background:#1976d2;color:white;border-radius:4px;padding:1px 4px;font-size:12px;font-weight:bold"
+                    cols[col_i].markdown(
+                        f"<center><span style='{estilo}'>✅ {dia_num}</span></center>",
+                        unsafe_allow_html=True
+                    )
+
+                dia_num += 1
+                slot += 1
+
+        st.markdown("---")
+        # Avanzar al mes siguiente
+        if month == 12:
+            curr_month = curr_month.replace(year=year+1, month=1)
+        else:
+            curr_month = curr_month.replace(month=month+1)
+
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 15)
@@ -93,7 +173,7 @@ st.sidebar.title("🚀 ERP Formación Cloud")
 menu = [
     "👥 Alumnos", "📚 Cursos", "📝 Matriculación",
     "🖊️ Pasar Lista", "📊 Reporte", "📄 PDF Semanal",
-    "🔍 Búsqueda", "🗑️ Eliminar Datos"
+    "📅 Calendario", "🔍 Búsqueda", "🗑️ Eliminar Datos"
 ]
 choice = st.sidebar.radio("Menú", menu)
 
@@ -285,6 +365,50 @@ elif choice == "📄 PDF Semanal":
             st.info("No hay asistencia registrada para esa semana")
     else:
         st.info("No hay datos de asistencia aún")
+
+# --- CALENDARIO ---
+elif choice == "📅 Calendario":
+    st.header("📅 Calendario del Curso")
+    if not df_cursos.empty:
+        c_cal = st.selectbox("Selecciona un curso", df_cursos["Nombre"])
+        row   = df_cursos[df_cursos["Nombre"] == c_cal].iloc[0]
+
+        inicio = pd.to_datetime(row["Inicio"]).date()
+        fin    = pd.to_datetime(row["Fin"]).date()
+        region = row["Región"]
+
+        dias_lectivos = obtener_calendario_curso(inicio, fin, region)
+
+        # Info resumen
+        years = list(set([inicio.year, fin.year]))
+        festivos = holidays.CountryHoliday('ES', subdiv=region, years=years)
+        festivos_en_rango = [d for d in festivos if inicio <= d <= fin and d.weekday() < 5]
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Días lectivos", len(dias_lectivos))
+        c2.metric("Festivos en el curso", len(festivos_en_rango))
+        try:
+            c3.metric("Horas totales", f"{float(row['Horas'])}h")
+        except:
+            pass
+
+        # Leyenda
+        st.markdown(
+            "🟢 Día lectivo &nbsp;&nbsp; 🔴 Festivo &nbsp;&nbsp; ⬜ Fin de semana / fuera de rango &nbsp;&nbsp; 🔵 Hoy",
+            unsafe_allow_html=True
+        )
+        st.markdown("---")
+
+        # Detalle festivos
+        if festivos_en_rango:
+            with st.expander(f"Ver festivos ({len(festivos_en_rango)})"):
+                for d in sorted(festivos_en_rango):
+                    st.caption(f"🔴 {d.strftime('%d/%m/%Y')} — {festivos[d]}")
+
+        # Render calendario
+        render_calendario(inicio, fin, region)
+    else:
+        st.info("No hay cursos registrados")
 
 # --- BÚSQUEDA ---
 elif choice == "🔍 Búsqueda":
